@@ -1,0 +1,17 @@
+{
+  "name": "spy-game",
+  "version": "1.0.0",
+  "description": "لعبة الجاسوس أونلاين",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}

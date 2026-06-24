@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🕵️‍♂️ لعبة الجاسوس أونلاين</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+            --text: #f8fafc;
+            --danger: #ef4444;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text); padding: 20px; text-align: center; margin: 0; }
+        .container { max-width: 500px; margin: 40px auto; background: var(--card-bg); padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        h1 { font-size: 28px; margin-bottom: 20px; color: var(--accent); }
+        input, select, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #334155; font-size: 16px; background: #0f172a; color: white; box-sizing: border-box; }
+        button { background: var(--accent); border: none; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:hover { background: var(--accent-hover); }
+        .room-badge { background: #334155; padding: 8px; margin: 5px; display: inline-block; border-radius: 6px; cursor: pointer; font-size: 14px; }
+        .room-badge:hover { background: var(--accent); }
+        #timer { font-size: 22px; color: #f59e0b; font-weight: bold; margin: 15px 0; }
+        .note-card { background: #334155; padding: 12px; margin: 8px 0; border-radius: 8px; text-align: right; border-right: 4px solid var(--accent); }
+        .player-tag { background: #1e293b; border: 1px solid #334155; padding: 8px; margin: 5px 0; border-radius: 6px; text-align: right; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>🕵️‍♂️ شبكة الجاسوس السرية</h1>
+
+        <div id="login-box">
+            <input type="text" id="username-input" placeholder="👨‍💻 ادخل اسمك المستعار">
+            <input type="text" id="room-input" placeholder="🔑 اكتب اسم الروم أو اختر من الأسفل">
+            
+            <div style="text-align: right; margin: 10px 0 5px 0;"><small style="color: #94a3b8;">رومات سريعة جاهزة:</small></div>
+            <div id="ready-rooms">
+                <span class="room-badge" onclick="selectRoom('غرفة 1')">🚪 غرفة 1</span>
+                <span class="room-badge" onclick="selectRoom('غرفة 2')">🚪 غرفة 2</span>
+                <span class="room-badge" onclick="selectRoom('غرفة 3')">🚪 غرفة 3</span>
+            </div>
+            
+            <button id="join-btn">الانضمام للشبكة 🌐</button>
+        </div>
+
+        <div id="game-box" style="display: none;">
+            <h2 id="room-title" style="color: #38bdf8;"></h2>
+            <div id="players-list"></div>
+            
+            <button id="start-btn" style="margin-top: 20px; background: #10b981;">ابدأ المهمة الآن 🚀</button>
+            <h3 id="role-display" style="margin: 20px 0; font-size: 22px; background: #0f172a; padding: 15px; border-radius: 8px;"></h3>
+
+            <div id="timer"></div>
+            
+            <div id="notes-section" style="display: none;">
+                <input type="text" id="note-input" placeholder="📝 اكتب ملاحظتك أو تلميحك هنا...">
+                <button id="submit-note-btn">إرسال الملاحظة السرية</button>
+            </div>
+
+            <div id="notes-container"></div>
+
+            <div id="voting-section" style="display: none; margin-top: 25px;">
+                <h3 style="color: var(--danger);">🚨 حان وقت التصويت! من هو الجاسوس?</h3>
+                <select id="voting-select"></select>
+                <button id="submit-vote-btn" style="background: var(--danger);">تأكيد التصويت ونفي المشتبه به 🗳️</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="client.js"></script>
+</body>
+</html>
