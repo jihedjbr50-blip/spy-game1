@@ -8,6 +8,7 @@ const joinBtn = document.getElementById('join-btn');
 const roomTitle = document.getElementById('room-title');
 const playersList = document.getElementById('players-list');
 const startBtn = document.getElementById('start-btn');
+const startStatus = document.getElementById('start-status');
 const roleDisplay = document.getElementById('role-display');
 const timerDisplay = document.getElementById('timer');
 const notesSection = document.getElementById('notes-section');
@@ -38,8 +39,9 @@ joinBtn.onclick = () => {
     }
 };
 
+// إرسال طلب البدء أو الموافقة
 startBtn.onclick = () => {
-    socket.emit('startGame');
+    socket.emit('requestStartGame');
 };
 
 socket.on('updatePlayers', (players) => {
@@ -49,8 +51,16 @@ socket.on('updatePlayers', (players) => {
     });
 });
 
+// استقبال التحديث المباشر من السيرفر وعرضه
+socket.on('updateStartRequests', (count) => {
+    if (startStatus) {
+        startStatus.innerText = `الموافقات الحالية: ${count} من 3 مطلوبين للبدء (تنبيه: يجب تواجد 4 لاعبين في الروم).`;
+    }
+});
+
 socket.on('gameRole', (data) => {
     startBtn.style.display = 'none';
+    if (startStatus) startStatus.style.display = 'none';
     notesContainer.innerHTML = '';
     votingSection.style.display = 'none';
     roleDisplay.innerText = data.word;
@@ -110,6 +120,10 @@ submitVoteBtn.onclick = () => {
 socket.on('gameEnded', (msg) => {
     alert(msg);
     startBtn.style.display = 'inline-block';
+    if (startStatus) {
+        startStatus.style.display = 'block';
+        startStatus.innerText = `الموافقات الحالية: 0 من 3 مطلوبين (يجب تواجد 4 لاعبين)`;
+    }
     roleDisplay.innerText = '';
     timerDisplay.innerText = '';
     notesContainer.innerHTML = '';
@@ -118,10 +132,8 @@ socket.on('gameEnded', (msg) => {
 
 socket.on('errorMsg', (msg) => {
     alert(msg);
-    window.location.reload();
 });
 
-// معالجة استقبال حدث الطرد وإعادة توجيه اللاعب المتأخر
 socket.on('kicked', (msg) => {
     alert(msg);
     window.location.reload();
