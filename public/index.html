@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🕵️‍♂️ لعبة الجاسوس أونلاين</title>
+    <title>Vloria-Spy</title>
     <style>
         :root {
             --bg-color: #0f172a;
@@ -24,6 +24,7 @@
         #timer { font-size: 22px; color: #f59e0b; font-weight: bold; margin: 15px 0; }
         .note-card { background: #334155; padding: 12px; margin: 8px 0; border-radius: 8px; text-align: right; border-right: 4px solid var(--accent); }
         .player-tag { background: #1e293b; border: 1px solid #334155; padding: 8px; margin: 5px 0; border-radius: 6px; text-align: right; }
+        #start-status { font-size: 14px; color: #94a3b8; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -49,7 +50,9 @@
             <h2 id="room-title" style="color: #38bdf8;"></h2>
             <div id="players-list"></div>
             
-            <button id="start-btn" style="margin-top: 20px; background: #10b981;">ابدأ المهمة الآن 🚀</button>
+            <button id="start-btn" style="margin-top: 20px; background: #10b981;">طلب بدء اللعبة 🚀</button>
+            <div id="start-status">الموافقات الحالية: 0 من 3 مطلوبين (يجب تواجد 4 لاعبين)</div>
+
             <h3 id="role-display" style="margin: 20px 0; font-size: 22px; background: #0f172a; padding: 15px; border-radius: 8px;"></h3>
 
             <div id="timer"></div>
@@ -62,7 +65,7 @@
             <div id="notes-container"></div>
 
             <div id="voting-section" style="display: none; margin-top: 25px;">
-                <h3 style="color: var(--danger);">🚨 حان وقت التصويت! من هو الجاسوس?</h3>
+                <h3 style="color: var(--danger);">🚨 حان وقت التصويت! من هو الجاسوس؟</h3>
                 <select id="voting-select"></select>
                 <button id="submit-vote-btn" style="background: var(--danger);">تأكيد التصويت ونفي المشتبه به 🗳️</button>
             </div>
