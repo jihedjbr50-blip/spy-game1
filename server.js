@@ -7,6 +7,18 @@ app.use(express.static('public'));
 
 const rooms = {};
 
+// بنك التصنيفات لتوليد كلمات متقاربة وعشوائية في لحظة بدء الجيم
+const gameCategories = {
+    fruits: ['تفاحة', 'برتقالة', 'موز', 'فراولة', 'مانجو', 'بطيخ', 'خوخ'],
+    transport: ['سيارة', 'قطار', 'طائرة', 'هليكوبتر', 'سفينة', 'دراجة', 'حافلة'],
+    places: ['مدرسة', 'جامعة', 'مستشفى', 'صيدلية', 'مطار', 'فندق', 'مطعم'],
+    tech: ['هاتف', 'كمبيوتر', 'تلفزيون', 'ساعة ذكية', 'كاميرا', 'لوحي'],
+    drinks: ['حليب', 'عصير', 'قهوة', 'شاي', 'ماء', 'مشروب غازي'],
+    sports: ['كرة القدم', 'كرة السلة', 'التنس', 'السباحة', 'الجري', 'الملاكمة'],
+    animals: ['أسد', 'نمر', 'فهد', 'ذئب', 'ثعلب', 'كلب', 'قطة'],
+    jobs: ['مهندس', 'طبيب', 'معلم', 'طيار', 'شرطي', 'محامي', 'محاسب']
+};
+
 io.on('connection', (socket) => {
 
     // انضمام لاعب أو إنشاء غرفة
@@ -20,11 +32,12 @@ io.on('connection', (socket) => {
                 players: [],
                 gameStarted: false,
                 spy: null,
-                word: '',
+                citizenWord: '',
+                spyWord: '',
                 votes: {},
                 notes: {},
                 isVoting: false,
-                startRequests: [] // مصفوفة مضمونة لتخزين الـ IDs الموافقة
+                startRequests: []
             };
         }
 
@@ -38,51 +51,58 @@ io.on('connection', (socket) => {
 
         room.players.push({ id: socket.id, username });
         io.to(roomName).emit('updatePlayers', room.players);
-        
-        // تحديث القادم الجديد بعدد الموافقات الحالي
         io.to(roomName).emit('updateStartRequests', room.startRequests.length);
     });
 
-    // طلب بدء اللعبة أو الموافقة عليها
+    // طلب بدء اللعبة والموافقة عليها
     socket.on('requestStartGame', () => {
         const roomName = socket.roomName;
         const room = rooms[roomName];
 
         if (!room || room.gameStarted) return;
 
-        // 1. تحقق من الحد الأدنى لوجود اللاعبين في الروم (4 لاعبين)
+        // التحقق من الحد الأدنى لوجود اللاعبين (4 لاعبين)
         if (room.players.length < 4) {
             socket.emit('errorMsg', '❌ لا يمكن بدء اللعبة! الحد الأدنى للتواجد في الروم هو 4 لاعبين.');
             return;
         }
 
-        // منع اللاعب من التصويت مرتين
         if (!room.startRequests.includes(socket.id)) {
             room.startRequests.push(socket.id);
         }
         
-        // إرسال التحديث فوراً للجميع برقم دقيق
         io.to(roomName).emit('updateStartRequests', room.startRequests.length);
 
-        // 2. إذا وصلت الموافقات إلى 3 أو أكثر، يبدأ القيم تلقائياً
+        // بدء الجيم تلقائياً عند وصول الموافقات إلى 3
         if (room.startRequests.length >= 3) {
             room.gameStarted = true;
             room.isVoting = false;
             room.notes = {};
             room.votes = {};
-            room.startRequests = []; // تصفير كامل للمستقبل
+            room.startRequests = [];
 
-            const words = ['تفاحة', 'سيارة', 'مدرسة', 'مستشفى', 'هاتف', 'طائرة'];
-            room.word = words[Math.floor(Math.random() * words.length)];
-            
+            // اختيار تصنيف عشوائي من البنك
+            const categoriesKeys = Object.keys(gameCategories);
+            const randomCategoryKey = categoriesKeys[Math.floor(Math.random() * categoriesKeys.length)];
+            const selectedCategoryWords = [...gameCategories[randomCategoryKey]];
+
+            // خلط الكلمات عشوائياً وسحب كلمتين مختلفتين تماماً من نفس التصنيف
+            selectedCategoryWords.sort(() => Math.random() - 0.5);
+            room.citizenWord = selectedCategoryWords[0]; // للمواطنين
+            room.spyWord = selectedCategoryWords[1];    // للجاسوس
+
+            // اختيار الجاسوس عشوائياً
             const spyIndex = Math.floor(Math.random() * room.players.length);
             room.spy = room.players[spyIndex];
 
+            // إرسال الكلمات المخصصة لكل دور
             room.players.forEach((player) => {
                 if (player.id === room.spy.id) {
-                    io.to(player.id).emit('gameRole', { role: 'spy', word: '🕵️‍♂️ أنت الجاسوس! حاول التخمين.' });
+                    // الجاسوس يستلم الكلمة البديلة (القريبة) هنا لتظهر على شاشته
+                    io.to(player.id).emit('gameRole', { role: 'spy', msg: `🕵️‍♂️ أنت الجاسوس! كلمتك السرية هي: ${room.spyWord}` });
                 } else {
-                    io.to(player.id).emit('gameRole', { role: 'citizen', word: `🍎 الكلمة السرية هي: ${room.word}` });
+                    // المواطنون يستلمون الكلمة الأصلية
+                    io.to(player.id).emit('gameRole', { role: 'citizen', msg: `🍎 الكلمة السرية هي: ${room.citizenWord}` });
                 }
             });
 
@@ -90,7 +110,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // استقبال الملاحظات من اللاعبين
+    // استقبال الملاحظات والتلميحات
     socket.on('sendNote', (noteText) => {
         const roomName = socket.roomName;
         const room = rooms[roomName];
@@ -108,7 +128,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // استقبال التصويت ضد الجاسوس
+    // استقبال أصوات اللاعبين
     socket.on('castVote', (votedPlayerId) => {
         const roomName = socket.roomName;
         const room = rooms[roomName];
@@ -121,7 +141,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // معالجة الخروج المفاجئ والـ Glitches
+    // حماية استقرار السيرفر عند الخروج المفاجئ
     socket.on('disconnect', () => {
         const roomName = socket.roomName;
         const username = socket.username;
@@ -131,7 +151,6 @@ io.on('connection', (socket) => {
 
         if (room) {
             room.players = room.players.filter(p => p.id !== socket.id);
-            // إزالة صوته من مصفوفة بدء اللعبة إذا غادر قبل التشغيل
             room.startRequests = room.startRequests.filter(id => id !== socket.id);
             delete room.notes[socket.id];
             delete room.votes[socket.id];
@@ -148,7 +167,7 @@ io.on('connection', (socket) => {
                     resetRoom(room);
                 } 
                 else if (room.players.length < 3) {
-                    io.to(roomName).emit('gameEnded', `⚠️ انتهت اللعبة بسبب خروج اللاعب (${username}) وهبوط عدد المشتركين تحت الـ 3.`);
+                    io.to(roomName).emit('gameEnded', `⚠️ انتهت اللعبة بسبب خروج اللاعب (${username}) ونقص المشتركين عن 3.`);
                     resetRoom(room);
                 }
                 else if (room.isVoting) {
@@ -168,7 +187,6 @@ io.on('connection', (socket) => {
 function startNotesPhase(roomName) {
     const room = rooms[roomName];
     room.notes = {};
-    
     io.to(roomName).emit('startNotesTimer', 30);
 
     room.players.forEach(player => {
@@ -176,14 +194,13 @@ function startNotesPhase(roomName) {
         if (playerSocket) {
             playerSocket.kickTimeout = setTimeout(() => {
                 if (!room.notes[player.id]) {
-                    playerSocket.emit('kicked', '⏰ تم طردك تلقائياً من الروم بسبب تأخرك في كتابة الملاحظة (30 ثانية)!');
+                    playerSocket.emit('kicked', '⏰ تم طردك تلقائياً من الروم بسبب تأخرك في كتابة الملاحظة!');
                     playerSocket.leave(roomName);
-                    
                     room.players = room.players.filter(p => p.id !== player.id);
                     io.to(roomName).emit('updatePlayers', room.players);
                     
                     if (room.players.length < 3) {
-                        io.to(roomName).emit('gameEnded', '⚠️ انتهت اللعبة بسبب طرد اللاعبين المتأخرين ونقص العدد الإجمالي.');
+                        io.to(roomName).emit('gameEnded', '⚠️ انتهت اللعبة بسبب نقص عدد المشتركين عن 3.');
                         resetRoom(room);
                     } else if (Object.keys(room.notes).length === room.players.length) {
                         io.to(roomName).emit('allNotesRevealed', Object.values(room.notes));
@@ -216,9 +233,9 @@ function checkVotes(roomName) {
     const votedPlayer = room.players.find(p => p.id === highestVotedId);
 
     if (votedPlayer && votedPlayer.id === room.spy.id) {
-        io.to(roomName).emit('gameEnded', `🎉 كفو! تم كشف الجاسوس بنجاح وهو: [ ${votedPlayer.username} ]. فاز المواطنون!`);
+        io.to(roomName).emit('gameEnded', `🎉 كفو! تم كشف الجاسوس بنجاح وهو: [ ${votedPlayer.username} ]. وكان يملك كلمة (${room.spyWord}). فاز المواطنون!`);
     } else {
-        io.to(roomName).emit('gameEnded', `💥 خسارة! صوّتّم ضد الشخص الخطأ. الجاسوس الحقيقي كان: [ ${room.spy.username} ]. فاز الجاسوس!`);
+        io.to(roomName).emit('gameEnded', `💥 خسارة! صوّتّم ضد الشخص الخطأ. الجاسوس الحقيقي كان: [ ${room.spy.username} ] بكلمة (${room.spyWord}). فاز الجاسوس!`);
     }
 
     resetRoom(room);
@@ -228,10 +245,11 @@ function resetRoom(room) {
     room.gameStarted = false;
     room.isVoting = false;
     room.spy = null;
-    room.word = '';
+    room.citizenWord = '';
+    room.spyWord = '';
     room.notes = {};
     room.votes = {};
-    room.startRequests = []; // إفراغ المصفوفة بنجاح
+    room.startRequests = [];
 }
 
 const PORT = process.env.PORT || 3000;
