@@ -39,7 +39,6 @@ joinBtn.onclick = () => {
     }
 };
 
-// إرسال طلب البدء أو الموافقة
 startBtn.onclick = () => {
     socket.emit('requestStartGame');
 };
@@ -51,19 +50,27 @@ socket.on('updatePlayers', (players) => {
     });
 });
 
-// استقبال التحديث المباشر من السيرفر وعرضه
 socket.on('updateStartRequests', (count) => {
     if (startStatus) {
         startStatus.innerText = `الموافقات الحالية: ${count} من 3 مطلوبين للبدء (تنبيه: يجب تواجد 4 لاعبين في الروم).`;
     }
 });
 
+// هنا يقرأ العميل الرسالة كاملة ويعرض للجاسوس كلمته القريبة بوضوح!
 socket.on('gameRole', (data) => {
     startBtn.style.display = 'none';
     if (startStatus) startStatus.style.display = 'none';
     notesContainer.innerHTML = '';
     votingSection.style.display = 'none';
-    roleDisplay.innerText = data.word;
+    
+    // عرض النص بالكامل القادم من السيرفر والمحتوي على الكلمة القريبة
+    roleDisplay.innerText = data.msg; 
+    
+    if (data.role === 'spy') {
+        roleDisplay.style.color = '#ef4444'; // لون أحمر للجاسوس
+    } else {
+        roleDisplay.style.color = '#10b981'; // لون أخضر للمواطن
+    }
 });
 
 socket.on('startNotesTimer', (seconds) => {
