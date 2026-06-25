@@ -23,7 +23,8 @@ io.on('connection', (socket) => {
                 word: '',
                 votes: {},
                 notes: {},
-                isVoting: false
+                isVoting: false,
+                startRequests: [] // مصفوفة مضمونة لتخزين الـ IDs الموافقة
             };
         }
 
@@ -37,42 +38,56 @@ io.on('connection', (socket) => {
 
         room.players.push({ id: socket.id, username });
         io.to(roomName).emit('updatePlayers', room.players);
+        
+        // تحديث القادم الجديد بعدد الموافقات الحالي
+        io.to(roomName).emit('updateStartRequests', room.startRequests.length);
     });
 
-    // بدء اللعبة
-    socket.on('startGame', () => {
+    // طلب بدء اللعبة أو الموافقة عليها
+    socket.on('requestStartGame', () => {
         const roomName = socket.roomName;
         const room = rooms[roomName];
 
         if (!room || room.gameStarted) return;
 
-        // التحقق من الحد الأدنى لبدء اللعبة
-        if (room.players.length < 3) {
-            socket.emit('errorMsg', 'لا يمكن بدء اللعبة! الحد الأدنى للاعبين هو 3 لاعبين.');
+        // 1. تحقق من الحد الأدنى لوجود اللاعبين في الروم (4 لاعبين)
+        if (room.players.length < 4) {
+            socket.emit('errorMsg', '❌ لا يمكن بدء اللعبة! الحد الأدنى للتواجد في الروم هو 4 لاعبين.');
             return;
         }
 
-        room.gameStarted = true;
-        room.isVoting = false;
-        room.notes = {};
-        room.votes = {};
-
-        const words = ['تفاحة', 'سيارة', 'مدرسة', 'مستشفى', 'هاتف', 'طائرة'];
-        room.word = words[Math.floor(Math.random() * words.length)];
+        // منع اللاعب من التصويت مرتين
+        if (!room.startRequests.includes(socket.id)) {
+            room.startRequests.push(socket.id);
+        }
         
-        const spyIndex = Math.floor(Math.random() * room.players.length);
-        room.spy = room.players[spyIndex];
+        // إرسال التحديث فوراً للجميع برقم دقيق
+        io.to(roomName).emit('updateStartRequests', room.startRequests.length);
 
-        room.players.forEach((player) => {
-            if (player.id === room.spy.id) {
-                io.to(player.id).emit('gameRole', { role: 'spy', word: '🕵️‍♂️ أنت الجاسوس! حاول التخمين.' });
-            } else {
-                io.to(player.id).emit('gameRole', { role: 'citizen', word: `🍎 الكلمة السرية هي: ${room.word}` });
-            }
-        });
+        // 2. إذا وصلت الموافقات إلى 3 أو أكثر، يبدأ القيم تلقائياً
+        if (room.startRequests.length >= 3) {
+            room.gameStarted = true;
+            room.isVoting = false;
+            room.notes = {};
+            room.votes = {};
+            room.startRequests = []; // تصفير كامل للمستقبل
 
-        // تشغيل مرحلة الملاحظات تلقائياً مع المؤقت الجديد
-        startNotesPhase(roomName);
+            const words = ['تفاحة', 'سيارة', 'مدرسة', 'مستشفى', 'هاتف', 'طائرة'];
+            room.word = words[Math.floor(Math.random() * words.length)];
+            
+            const spyIndex = Math.floor(Math.random() * room.players.length);
+            room.spy = room.players[spyIndex];
+
+            room.players.forEach((player) => {
+                if (player.id === room.spy.id) {
+                    io.to(player.id).emit('gameRole', { role: 'spy', word: '🕵️‍♂️ أنت الجاسوس! حاول التخمين.' });
+                } else {
+                    io.to(player.id).emit('gameRole', { role: 'citizen', word: `🍎 الكلمة السرية هي: ${room.word}` });
+                }
+            });
+
+            startNotesPhase(roomName);
+        }
     });
 
     // استقبال الملاحظات من اللاعبين
@@ -85,17 +100,15 @@ io.on('connection', (socket) => {
 
         if (socket.kickTimeout) clearTimeout(socket.kickTimeout);
 
-        // إذا أرسل الجميع الملاحظات، يتم عرضها والبدء بالتصويت فوراً
         if (Object.keys(room.notes).length === room.players.length) {
             io.to(roomName).emit('allNotesRevealed', Object.values(room.notes));
-            
             room.isVoting = true;
             room.votes = {};
             io.to(roomName).emit('startVotingPhase', room.players);
         }
     });
 
-    // استقبال التصويت
+    // استقبال التصويت ضد الجاسوس
     socket.on('castVote', (votedPlayerId) => {
         const roomName = socket.roomName;
         const room = rooms[roomName];
@@ -108,7 +121,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // حماية اللعبة من خروج اللاعبين المفاجئ أو طردهم (Glitches)
+    // معالجة الخروج المفاجئ والـ Glitches
     socket.on('disconnect', () => {
         const roomName = socket.roomName;
         const username = socket.username;
@@ -118,23 +131,26 @@ io.on('connection', (socket) => {
 
         if (room) {
             room.players = room.players.filter(p => p.id !== socket.id);
+            // إزالة صوته من مصفوفة بدء اللعبة إذا غادر قبل التشغيل
+            room.startRequests = room.startRequests.filter(id => id !== socket.id);
             delete room.notes[socket.id];
             delete room.votes[socket.id];
 
             io.to(roomName).emit('updatePlayers', room.players);
+            
+            if (!room.gameStarted) {
+                io.to(roomName).emit('updateStartRequests', room.startRequests.length);
+            }
 
             if (room.gameStarted) {
-                // 1. إذا خرج الجاسوس ينتهي القيم بفوز المواطنين
                 if (room.spy && room.spy.id === socket.id) {
                     io.to(roomName).emit('gameEnded', `🚨 خرج الجاسوس (${username}) من اللعبة! فاز المواطنون تلقائياً.`);
                     resetRoom(room);
                 } 
-                // 2. إذا خرج لاعب عادي وقل عدد اللاعبين عن الحد الأدنى (3 لاعبين) ينتهي القيم فوراً
                 else if (room.players.length < 3) {
-                    io.to(roomName).emit('gameEnded', `⚠️ انتهت اللعبة بسبب خروج اللاعب (${username}) وهبوط العدد عن الحد الأدنى (3 لاعبين).`);
+                    io.to(roomName).emit('gameEnded', `⚠️ انتهت اللعبة بسبب خروج اللاعب (${username}) وهبوط عدد المشتركين تحت الـ 3.`);
                     resetRoom(room);
                 }
-                // 3. تحديث فحص التصويت إذا كان جارياً لمنع تعليق القيم بانتظار الغائب
                 else if (room.isVoting) {
                     if (Object.keys(room.votes).length === room.players.length && room.players.length > 0) {
                         checkVotes(roomName);
@@ -149,7 +165,6 @@ io.on('connection', (socket) => {
     });
 });
 
-// نظام مؤقت الملاحظات وطرد من يتأخر عن 30 ثانية
 function startNotesPhase(roomName) {
     const room = rooms[roomName];
     room.notes = {};
@@ -160,28 +175,23 @@ function startNotesPhase(roomName) {
         const playerSocket = io.sockets.sockets.get(player.id);
         if (playerSocket) {
             playerSocket.kickTimeout = setTimeout(() => {
-                // إذا انتهى الوقت ولم يرسل الملاحظة، يتم طرده من الروم
                 if (!room.notes[player.id]) {
                     playerSocket.emit('kicked', '⏰ تم طردك تلقائياً من الروم بسبب تأخرك في كتابة الملاحظة (30 ثانية)!');
                     playerSocket.leave(roomName);
                     
-                    // إخراجه رسمياً من مصفوفة اللاعبين
                     room.players = room.players.filter(p => p.id !== player.id);
                     io.to(roomName).emit('updatePlayers', room.players);
                     
-                    // فحص فوري: هل طرده تسبب في هبوط العدد عن الحد الأدنى؟
                     if (room.players.length < 3) {
-                        io.to(roomName).emit('gameEnded', '⚠️ انتهت اللعبة بعد طرد اللاعبين المتأخرين وهبوط العدد الإجمالي عن 3 لاعبين.');
+                        io.to(roomName).emit('gameEnded', '⚠️ انتهت اللعبة بسبب طرد اللاعبين المتأخرين ونقص العدد الإجمالي.');
                         resetRoom(room);
-                    } 
-                    // إذا كان الباقون قد أرسلوا ملاحظاتهم بعد طرده، ننتقل للتصويت مباشرة
-                    else if (Object.keys(room.notes).length === room.players.length) {
+                    } else if (Object.keys(room.notes).length === room.players.length) {
                         io.to(roomName).emit('allNotesRevealed', Object.values(room.notes));
                         room.isVoting = true;
                         io.to(roomName).emit('startVotingPhase', room.players);
                     }
                 }
-            }, 30000); // 30 ثانية
+            }, 30000);
         }
     });
 }
@@ -221,6 +231,7 @@ function resetRoom(room) {
     room.word = '';
     room.notes = {};
     room.votes = {};
+    room.startRequests = []; // إفراغ المصفوفة بنجاح
 }
 
 const PORT = process.env.PORT || 3000;
